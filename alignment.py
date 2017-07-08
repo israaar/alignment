@@ -41,7 +41,7 @@ def print_alignment(alignment):
         stripped_alignment_line = alignment_line[n_leading_spaces:]
         display_strings.append("\nSeq1: {}".format(ref_line))
         if "|" in stripped_alignment_line:
-            display_strings.append("     {}".format(stripped_alignment_line))
+            display_strings.append("      {}".format(stripped_alignment_line))
         display_strings.append("Seq2: {}".format(stripped_query_line))
         start_index += line_length
         start_index += n_leading_spaces
@@ -87,7 +87,7 @@ def word_distance(word_1, word_2):
 
 
 class Alignment(object):
-    def __init__(self, ref_sequence, query_sequence, ref_to_align=None, query_to_align=None, gap_extend=0.5, gap_open=2.5):
+    def __init__(self, ref_sequence, query_sequence, ref_to_align=None, query_to_align=None, gap_extend=0.5, gap_open=1.0):
         self.gap_extend = gap_extend
         self.gap_open = gap_open
         self.ref_sequence = ref_sequence
@@ -272,7 +272,7 @@ class Alignment(object):
 
 
 class CharAlignment(Alignment):
-    def __init__(self, ref_string, query_string, gap_extend=0.5, gap_open=2.5, case_sensitive=False):
+    def __init__(self, ref_string, query_string, gap_extend=0.5, gap_open=1.0, case_sensitive=False):
         self.distance = char_distance
         ref_to_align = ref_string if case_sensitive else ref_string.lower()
         query_to_align = query_string if case_sensitive else query_string.lower()
@@ -287,7 +287,7 @@ class CharAlignment(Alignment):
 
 
 class WordAlignment(Alignment):
-    def __init__(self, ref_string, query_string, gap_extend=0.5, gap_open=2.5, punctuation_sensitive=False, case_sensitive=False):
+    def __init__(self, ref_string, query_string, gap_extend=0.5, gap_open=1.0, punctuation_sensitive=False, case_sensitive=False):
         self.distance = word_distance
         ref_sequence = word_tokenize(ref_string, strip_punctuation=False)
         query_sequence = word_tokenize(query_string, strip_punctuation=False)
