@@ -20,10 +20,11 @@ def word_tokenize(text, strip_punctuation=True):
     return word_tokens
 
 
-def print_alignment(alignment):
+def print_alignment(alignment, columns=None):
     # standalone function so alignment objects don't have to worry about formatting
     # but a similar case could be made for the make_string() method...
-    columns, rows = shutil.get_terminal_size()
+    if columns is None:
+        columns, rows = shutil.get_terminal_size()
     width = min(len(alignment.aligned_query_string), columns - 6)
     wrapped_ref_lines = textwrap.wrap(alignment.aligned_ref_string, width=width)
     display_strings = []
@@ -87,7 +88,7 @@ def word_distance(word_1, word_2):
 
 
 class Alignment(object):
-    def __init__(self, ref_sequence, query_sequence, ref_to_align=None, query_to_align=None, gap_extend=0.5, gap_open=1.0):
+    def __init__(self, ref_sequence, query_sequence, ref_to_align=None, query_to_align=None, gap_extend=0.5, gap_open=0.5):
         self.gap_extend = gap_extend
         self.gap_open = gap_open
         self.ref_sequence = ref_sequence
@@ -272,7 +273,7 @@ class Alignment(object):
 
 
 class CharAlignment(Alignment):
-    def __init__(self, ref_string, query_string, gap_extend=0.5, gap_open=1.0, case_sensitive=False):
+    def __init__(self, ref_string, query_string, gap_extend=0.5, gap_open=0.5, case_sensitive=False):
         self.distance = char_distance
         ref_to_align = ref_string if case_sensitive else ref_string.lower()
         query_to_align = query_string if case_sensitive else query_string.lower()
@@ -287,7 +288,7 @@ class CharAlignment(Alignment):
 
 
 class WordAlignment(Alignment):
-    def __init__(self, ref_string, query_string, gap_extend=0.5, gap_open=1.0, punctuation_sensitive=False, case_sensitive=False):
+    def __init__(self, ref_string, query_string, gap_extend=0.5, gap_open=0.5, punctuation_sensitive=False, case_sensitive=False):
         self.distance = word_distance
         ref_sequence = word_tokenize(ref_string, strip_punctuation=False)
         query_sequence = word_tokenize(query_string, strip_punctuation=False)
