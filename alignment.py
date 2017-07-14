@@ -6,6 +6,7 @@ import shutil
 
 from nltk.metrics.distance import edit_distance
 import numpy as np
+#import matplotlib.pyplot as plt
 
 punct_tokens = (",", ":", ".", ";", "!", "?", "¿", "¡")
 punct_re = re.compile("[-;:,.!?¡¿()\"]", re.UNICODE)
@@ -75,10 +76,10 @@ def word_distance(word_1, word_2):
     # has trouble with parens
     if word_1 == word_2:
         return 0
-    #elif same_ignoring_case_and_punctuation(word_1, word_2):
-    #    return 0
-    # Removing this was probably a premature optimization.
+    elif same_ignoring_case_and_punctuation(word_1, word_2):
+        return 0
     else:
+        #return 2
         return scaled_edit_distance(word_1, word_2)
 
         #too slow and doesn't benefit us much?
@@ -88,7 +89,7 @@ def word_distance(word_1, word_2):
 
 
 class Alignment(object):
-    def __init__(self, ref_sequence, query_sequence, ref_to_align=None, query_to_align=None, gap_extend=0.5, gap_open=0.5):
+    def __init__(self, ref_sequence, query_sequence, ref_to_align=None, query_to_align=None, gap_extend=0.5, gap_open=1):
         self.gap_extend = gap_extend
         self.gap_open = gap_open
         self.ref_sequence = ref_sequence
@@ -97,7 +98,7 @@ class Alignment(object):
         self.query_to_align = query_sequence if query_to_align is None else query_to_align
         self.alignment, self.aligned_ref, self.aligned_query = ([],) * 3
         self.aligned_ref_string, self.alignment_string, self.aligned_query_string = ("",) * 3
-        self.score = None
+        self.cost = None
         self.affine_global_align()
         self.make_strings()
 
@@ -110,7 +111,7 @@ class Alignment(object):
 
         """
         For affine:
-        create three alignment score matrices
+        create three alignment cost matrices
             left
             down
             diag
@@ -122,37 +123,44 @@ class Alignment(object):
         n_rows = len(query_to_align) + 1
         n_cols = len(ref_to_align) + 1
 
-        vertical_matrix = np.zeros((n_rows, n_cols))
-        horizontal_matrix = np.zeros((n_rows, n_cols))
-        diagonal_matrix = np.zeros((n_rows, n_cols))
+        y = np.zeros((n_rows, n_cols))
+        x = np.zeros((n_rows, n_cols))
+        z = np.zeros((n_rows, n_cols))
 
 
         for i in range(0, n_rows):
-            cost = i * self.gap_open
-            vertical_matrix[i][0] = cost # change these to not penalize terminal gaps, or at least not as heavily?
-            horizontal_matrix[i][0] = cost
+            cost = self.gap_open + (i * self.gap_extend)
+            y[i][0] = cost  # should I penalize terminal gaps differently?
+            x[i][0] = cost
+            z[i][0] = cost
 
         for j in range(0, n_cols):
-            cost = j * self.gap_open
-            vertical_matrix[0][j] = cost
-            horizontal_matrix[0][j] = cost
+            cost = self.gap_open + (j * self.gap_extend)
+            y[0][j] = cost
+            x[0][j] = cost
+            z[0][j] = cost
 
         # Can I avoid filling in all entries in this matrix?
+        
         for i in range(1, n_rows):
             for j in range(1, n_cols):
-                vertical_extend = vertical_matrix[i - 1][j] + self.gap_extend
-                vertical_open = diagonal_matrix[i - 1][j] + self.gap_open + self.gap_extend
-                vertical_matrix[i][j] = min(vertical_extend, vertical_open)
+                vert_extend = y[i - 1][j] + self.gap_extend
+                vert_open = z[i - 1][j] + self.gap_open + self.gap_extend
+                y[i][j] = min(vert_extend, vert_open)
 
-                horizontal_extend = horizontal_matrix[i][j - 1] + self.gap_extend
-                horizontal_open = diagonal_matrix[i][j - 1] + self.gap_open + self.gap_extend
-                horizontal_matrix[i][j] = min(horizontal_extend, horizontal_open)
+                horiz_extend = x[i][j - 1] + self.gap_extend
+                horiz_open = z[i][j - 1] + self.gap_open + self.gap_extend
+                x[i][j] = min(horiz_extend, horiz_open)
 
-                match = diagonal_matrix[i - 1][j - 1] + self.distance(query_to_align[i - 1], ref_to_align[j - 1])
-                vertical = vertical_matrix[i][j]
-                horizontal = horizontal_matrix[i][j]
-                diagonal_matrix[i][j] = min(match, vertical, horizontal)
+                match = z[i - 1][j - 1] + self.distance(query_to_align[i - 1], ref_to_align[j - 1])
+                vertical = y[i][j]
+                horizontal = x[i][j]
+                z[i][j] = min(match, vertical, horizontal)
 
+
+        #plt.matshow(y)
+        #plt.matshow(x)
+        #plt.matshow(z)
         """
         Track back to create the aligned sequence pair
         If in diagonal: can either match, go to the vertical (open gap), or go to the horizontal (open gap)
@@ -164,26 +172,27 @@ class Alignment(object):
         aligned_query = []
         i = len(query)
         j = len(ref)
-        matrices = {"diagonal": diagonal_matrix, "vertical": vertical_matrix, "horizontal": horizontal_matrix}
+        matrices = {"diagonal": z, "vertical": y, "horizontal": x}
         current_matrix_key = "diagonal"
 
-        total_score = 0
+        total_cost = 0
         while i > 0 and j > 0:
             #print(i, j)
+            #print(current_matrix_key)
             current_matrix = matrices[current_matrix_key]
-            score = current_matrix[i][j]
-            total_score += score
+            cost = current_matrix[i][j]
+            total_cost += cost
             element_1 = query_to_align[i - 1]
             element_2 = ref_to_align[j - 1]
             orig_element_1 = query[i - 1]
             orig_element_2 = ref[j - 1]
 
             if current_matrix_key == "diagonal":
-                diag_score = diagonal_matrix[i - 1][j - 1]
-                up_score = vertical_matrix[i][j]
-                left_score = horizontal_matrix[i][j]
+                diag_cost = z[i - 1][j - 1]
+                up_cost = y[i][j]
+                left_cost = x[i][j]
                 distance = self.distance(element_1, element_2)
-                if score == diag_score + distance:
+                if cost == diag_cost + distance:
                     if distance == 0:
                         alignment.append("match")
                     else:
@@ -192,35 +201,40 @@ class Alignment(object):
                     aligned_ref.append(orig_element_2)
                     i -= 1
                     j -= 1
-                elif score == left_score:
+                elif cost == left_cost:
                     current_matrix_key = "horizontal"
-                elif score == up_score:
+                elif cost == up_cost:
                     current_matrix_key = "vertical"
                 else:
                     sys.stderr.write('Not Possible')
             elif current_matrix_key == "vertical":
-                diag_score = diagonal_matrix[i - 1][j]
-                if score == diag_score + self.gap_open + self.gap_extend:
+                diag_cost = z[i - 1][j]
+                diag_open = diag_cost + self.gap_open + self.gap_extend
+                if cost == diag_open:
                     current_matrix_key = "diagonal"
                 aligned_query.append(orig_element_1)
                 aligned_ref.append("")
                 alignment.append("gap")
                 i -= 1
             elif current_matrix_key == "horizontal":
-                diag_score = diagonal_matrix[i][j - 1]
-                if score == diag_score + self.gap_open + self.gap_extend:
+                diag_cost = z[i][j - 1]
+                diag_open = diag_cost + self.gap_open + self.gap_extend
+                if cost == diag_open:
                     current_matrix_key = "diagonal"
                 aligned_query.append("")
                 aligned_ref.append(orig_element_2)
                 alignment.append("gap")
                 j -= 1
+        # gap at beginning of sequence
+        if i > 0 or j > 0:
+            total_cost += self.gap_open
         while i > 0:
             #print(i, j)
             orig_element_1 = query[i - 1]
             aligned_query.append(orig_element_1)
             aligned_ref.append("")
             alignment.append("gap")
-            total_score += self.gap_extend
+            total_cost += self.gap_extend
             i -= 1
         while j > 0:
             #print(i, j)
@@ -228,17 +242,17 @@ class Alignment(object):
             aligned_query.append("")
             aligned_ref.append(orig_element_2)
             alignment.append("gap")
-            total_score += self.gap_extend
+            total_cost += self.gap_extend
             j -= 1
 
         self.alignment = list(reversed(alignment))
         self.aligned_ref = list(reversed(aligned_ref))
         self.aligned_query = list(reversed(aligned_query))
-        self.score = total_score / float(len(alignment))
+        self.cost = total_cost / float(len(alignment))
 
-    def reference_scores(self):
+    def reference_costs(self):
         ref_length = len(self.ref_sequence)
-        scores = [0] * ref_length
+        costs = [0] * ref_length
         ref_index = 0
         alignment_index = 0
         in_ref_gap = False
@@ -260,7 +274,7 @@ class Alignment(object):
                     after_ref_gaps.append(ref_index)
                     in_ref_gap = False
                 if align_item == 'match':
-                    scores[ref_index] = 1
+                    costs[ref_index] = 1
                     ref_index += 1
                 elif align_item == 'mismatch':
                     ref_index += 1
@@ -268,12 +282,12 @@ class Alignment(object):
             alignment_index += 1
 
         for index in before_ref_gaps + after_ref_gaps:
-            scores[index] = 0
-        return scores
+            costs[index] = 0
+        return costs
 
 
 class CharAlignment(Alignment):
-    def __init__(self, ref_string, query_string, gap_extend=0.5, gap_open=0.5, case_sensitive=False):
+    def __init__(self, ref_string, query_string, gap_extend=0.5, gap_open=1, case_sensitive=False):
         self.distance = char_distance
         ref_to_align = ref_string if case_sensitive else ref_string.lower()
         query_to_align = query_string if case_sensitive else query_string.lower()
@@ -288,7 +302,7 @@ class CharAlignment(Alignment):
 
 
 class WordAlignment(Alignment):
-    def __init__(self, ref_string, query_string, gap_extend=0.5, gap_open=0.5, punctuation_sensitive=False, case_sensitive=False):
+    def __init__(self, ref_string, query_string, gap_extend=0.5, gap_open=1, punctuation_sensitive=False, case_sensitive=False):
         self.distance = word_distance
         ref_sequence = word_tokenize(ref_string, strip_punctuation=False)
         query_sequence = word_tokenize(query_string, strip_punctuation=False)
