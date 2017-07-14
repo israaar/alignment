@@ -54,7 +54,7 @@ def print_alignment(alignment, columns=None):
 
 def char_distance(char_1, char_2):
     # case_re = re.compile(char_1, re.IGNORECASE)
-    return 0 if char_1 == char_2 else 2
+    return 0 if char_1 == char_2 else 1
 
 
 def same_ignoring_case_and_punctuation(word_1, word_2):
@@ -69,7 +69,7 @@ def same_ignoring_case_and_punctuation(word_1, word_2):
 def scaled_edit_distance(word_1, word_2):
     edit_dist = edit_distance(word_1, word_2)
     max_len = max(len(word_1), len(word_2))
-    return 2 * (edit_dist / float(max_len))
+    return edit_dist / float(max_len) 
 
 
 def word_distance(word_1, word_2):
@@ -79,17 +79,14 @@ def word_distance(word_1, word_2):
     elif same_ignoring_case_and_punctuation(word_1, word_2):
         return 0
     else:
-        #return 2
+        #return 1
         return scaled_edit_distance(word_1, word_2)
 
-        #too slow and doesn't benefit us much?
-        #aligned_seq1, alignment, aligned_ref, perc_correct = self.affine_global_align(word_1, word_2)
-        #return -1 - ((100 - perc_correct) / 50)
-        #return -2
-
+        # another option: align the words
+        # too slow and doesn't benefit us much?
 
 class Alignment(object):
-    def __init__(self, ref_sequence, query_sequence, ref_to_align=None, query_to_align=None, gap_extend=0.5, gap_open=1):
+    def __init__(self, ref_sequence, query_sequence, ref_to_align=None, query_to_align=None, gap_extend=0.25, gap_open=0.5):
         self.gap_extend = gap_extend
         self.gap_open = gap_open
         self.ref_sequence = ref_sequence
@@ -287,7 +284,7 @@ class Alignment(object):
 
 
 class CharAlignment(Alignment):
-    def __init__(self, ref_string, query_string, gap_extend=0.5, gap_open=1, case_sensitive=False):
+    def __init__(self, ref_string, query_string, gap_extend=0.25, gap_open=0.5, case_sensitive=False):
         self.distance = char_distance
         ref_to_align = ref_string if case_sensitive else ref_string.lower()
         query_to_align = query_string if case_sensitive else query_string.lower()
@@ -302,7 +299,7 @@ class CharAlignment(Alignment):
 
 
 class WordAlignment(Alignment):
-    def __init__(self, ref_string, query_string, gap_extend=0.5, gap_open=1, punctuation_sensitive=False, case_sensitive=False):
+    def __init__(self, ref_string, query_string, gap_extend=0.25, gap_open=0.5, punctuation_sensitive=False, case_sensitive=False):
         self.distance = word_distance
         ref_sequence = word_tokenize(ref_string, strip_punctuation=False)
         query_sequence = word_tokenize(query_string, strip_punctuation=False)
